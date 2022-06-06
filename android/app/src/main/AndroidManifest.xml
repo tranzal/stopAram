@@ -33,7 +33,7 @@
             android:value="2" />
        <meta-data
                android:name="com.naver.maps.map.CLIENT_ID"
-               android:value="4p40vitind" />
+               android:value="ClientID" />
     </application>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
