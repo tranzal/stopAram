@@ -10,7 +10,7 @@ import 'package:vibration/vibration.dart';
 // https://api.ncloud-docs.com/docs/ai-naver-mapsgeocoding-geocode 참고
 //https://guide.ncloud-docs.com/docs/naveropenapiv3-maps-android-sdk-v3-1-download
 // https://blog.naver.com/websearch/220482884843 위도 경도 계산
-
+//https://medium.com/flutter/executing-dart-in-the-background-with-flutter-plugins-and-geofencing-2b3e40a1a124
 void main() => runApp(MyApp());
 
 class MyApp extends StatefulWidget {
@@ -27,11 +27,11 @@ class _MyAppState extends State<MyApp> {
   Timer? _timer = null;
   Completer<NaverMapController> _controller = Completer();
   List<Marker> _markers = [];
+  var destinationDistanceResult = 0;
 
   @override
   void initState() {
     super.initState();
-
   }
 
   @override
@@ -43,7 +43,9 @@ class _MyAppState extends State<MyApp> {
         left: true,
         right: true,
         child: Scaffold(
-          appBar: AppBar(),
+          appBar: AppBar(
+            title: Text('${destinationDistanceResult.toString()}m'),
+          ),
           body: Column(
             children: <Widget>[
               _controlPanel(),
@@ -90,7 +92,9 @@ class _MyAppState extends State<MyApp> {
           // 삭제
           Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _currentMode = MODE_REMOVE),
+              onTap: () => setState(() {
+                _currentMode = MODE_REMOVE;
+              }),
               child: Container(
                 decoration: BoxDecoration(
                     color: _currentMode == MODE_REMOVE
@@ -216,6 +220,8 @@ class _MyAppState extends State<MyApp> {
     if (_currentMode == MODE_REMOVE) {
       setState(() {
         _markers.removeWhere((m) => m.markerId == marker!.markerId);
+        _timer?.cancel();
+        destinationDistanceResult = 0;
       });
     }
   }
@@ -246,16 +252,24 @@ class _MyAppState extends State<MyApp> {
     return distance;
   }
 
-  void timerSetting(LatLng latLng){
+  void timerSetting(LatLng latLng) async {
     if(_timer != null){
       _timer?.cancel();
     }
+    var result = await distanceResult(latLng);
     setState(() {
+      destinationDistanceResult = (result * 1000).toInt();
       _timer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
         var result = await distanceResult(latLng);
+        setState(() {
+          destinationDistanceResult = (result * 1000).toInt();
+        });
         debugPrint(result.toString());
         if(result < 0.25){
           Vibration.vibrate(duration: 1000);
+          setState(() {
+            destinationDistanceResult = 0;
+          });
           timer.cancel();
         }
       });
