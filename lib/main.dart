@@ -1,17 +1,34 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:background_fetch/background_fetch.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:get/get.dart';
 import 'package:naver_map_plugin/naver_map_plugin.dart';
 import 'package:vibration/vibration.dart';
 
 // https://api.ncloud-docs.com/docs/ai-naver-mapsgeocoding-geocode 참고
 //https://guide.ncloud-docs.com/docs/naveropenapiv3-maps-android-sdk-v3-1-download
 // https://blog.naver.com/websearch/220482884843 위도 경도 계산
-//https://medium.com/flutter/executing-dart-in-the-background-with-flutter-plugins-and-geofencing-2b3e40a1a124
-void main() => runApp(MyApp());
+void backgroundFetchHeadlessTask(HeadlessTask task) async {
+  String taskId = task.taskId;
+  bool isTimeout = task.timeout;
+  if (isTimeout) {
+    // This task has exceeded its allowed running-time.
+    // You must stop what you're doing and immediately .finish(taskId)
+    print("[BackgroundFetch] Headless task timed-out: $taskId");
+    BackgroundFetch.finish(taskId);
+    return;
+  }
+  print('[BackgroundFetch] Headless event received.');
+  // Do your work here...
+  BackgroundFetch.finish(taskId);
+}
+
+void main() {
+    runApp(MyApp());
+    BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
+}
 
 class MyApp extends StatefulWidget {
 
@@ -32,6 +49,42 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+  }
+
+  Future<void> initPlatformState() async {
+    // Configure BackgroundFetch.
+    int status = await BackgroundFetch.configure(BackgroundFetchConfig(
+        minimumFetchInterval: 15,
+        stopOnTerminate: false,
+        enableHeadless: true,
+        requiresBatteryNotLow: false,
+        requiresCharging: false,
+        requiresStorageNotLow: false,
+        requiresDeviceIdle: false,
+        requiredNetworkType: NetworkType.NONE
+    ), (String taskId) async {  // <-- Event handler
+      // This is the fetch-event callback.
+      print("[BackgroundFetch] Event received $taskId");
+      setState(() {
+        // _events.insert(0, new DateTime.now());
+      });
+      // IMPORTANT:  You must signal completion of your task or the OS can punish your app
+      // for taking too long in the background.
+      BackgroundFetch.finish(taskId);
+    }, (String taskId) async {  // <-- Task timeout handler.
+      // This task has exceeded its allowed running-time.  You must stop what you're doing and immediately .finish(taskId)
+      print("[BackgroundFetch] TASK TIMEOUT taskId: $taskId");
+      BackgroundFetch.finish(taskId);
+    });
+    print('[BackgroundFetch] configure success: $status');
+    setState(() {
+      // _status = status;
+    });
+
+    // If the widget was removed from the tree while the asynchronous platform
+    // message was in flight, we want to discard the reply rather than calling
+    // setState to update our non-existent appearance.
+    if (!mounted) return;
   }
 
   @override
@@ -226,32 +279,6 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future<double> distanceResult(LatLng latLng) async {
-    var deviceLocation = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-
-    var deviceLongitudeDegree = (deviceLocation.longitude).toInt();
-    var deviceLongitudeMinute = ((deviceLocation.longitude - deviceLongitudeDegree) * 60).toInt();
-    var deviceLongitudeSecond = ((deviceLocation.longitude - deviceLongitudeDegree) * 60 - deviceLongitudeMinute) * 60;
-
-    var deviceLatitudeDegree = (deviceLocation.latitude).toInt();
-    var deviceLatitudeMinute = ((deviceLocation.latitude - deviceLatitudeDegree) * 60).toInt();
-    var deviceLatitudeSecond = ((deviceLocation.latitude - deviceLatitudeDegree) * 60 - deviceLatitudeMinute) * 60;
-
-    var destinationLongitudeDegree = (latLng.longitude).toInt();
-    var destinationLongitudeMinute = ((latLng.longitude - destinationLongitudeDegree) * 60).toInt();
-    var destinationLongitudeSecond = ((latLng.longitude - destinationLongitudeDegree) * 60 - destinationLongitudeMinute) * 60;
-
-    var destinationLatitudeDegree = (latLng.latitude).toInt();
-    var destinationLatitudeMinute = ((latLng.latitude - destinationLatitudeDegree) * 60).toInt();
-    var destinationLatitudeSecond = ((latLng.latitude - destinationLatitudeDegree) * 60 - destinationLatitudeMinute) * 60;
-
-    var longitude = pow(((deviceLongitudeDegree - destinationLongitudeDegree).abs() * 88.9036 + (deviceLongitudeMinute - destinationLongitudeMinute).abs() * 1.4817 + (deviceLongitudeSecond - destinationLongitudeSecond).abs() * 0.0246), 2);
-    var latitude = pow(((deviceLatitudeDegree - destinationLatitudeDegree).abs() * 111.3194 + (deviceLatitudeMinute - destinationLatitudeMinute).abs() * 1.8553 + (deviceLatitudeSecond - destinationLatitudeSecond).abs() * 0.0309), 2);
-    var distance = sqrt(longitude + latitude);
-
-    return distance;
-  }
-
   void timerSetting(LatLng latLng) async {
     if(_timer != null){
       _timer?.cancel();
@@ -275,4 +302,30 @@ class _MyAppState extends State<MyApp> {
       });
     });
   }
+}
+
+Future<double> distanceResult(LatLng latLng) async {
+  var deviceLocation = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+
+  var deviceLongitudeDegree = (deviceLocation.longitude).toInt();
+  var deviceLongitudeMinute = ((deviceLocation.longitude - deviceLongitudeDegree) * 60).toInt();
+  var deviceLongitudeSecond = ((deviceLocation.longitude - deviceLongitudeDegree) * 60 - deviceLongitudeMinute) * 60;
+
+  var deviceLatitudeDegree = (deviceLocation.latitude).toInt();
+  var deviceLatitudeMinute = ((deviceLocation.latitude - deviceLatitudeDegree) * 60).toInt();
+  var deviceLatitudeSecond = ((deviceLocation.latitude - deviceLatitudeDegree) * 60 - deviceLatitudeMinute) * 60;
+
+  var destinationLongitudeDegree = (latLng.longitude).toInt();
+  var destinationLongitudeMinute = ((latLng.longitude - destinationLongitudeDegree) * 60).toInt();
+  var destinationLongitudeSecond = ((latLng.longitude - destinationLongitudeDegree) * 60 - destinationLongitudeMinute) * 60;
+
+  var destinationLatitudeDegree = (latLng.latitude).toInt();
+  var destinationLatitudeMinute = ((latLng.latitude - destinationLatitudeDegree) * 60).toInt();
+  var destinationLatitudeSecond = ((latLng.latitude - destinationLatitudeDegree) * 60 - destinationLatitudeMinute) * 60;
+
+  var longitude = pow(((deviceLongitudeDegree - destinationLongitudeDegree).abs() * 88.9036 + (deviceLongitudeMinute - destinationLongitudeMinute).abs() * 1.4817 + (deviceLongitudeSecond - destinationLongitudeSecond).abs() * 0.0246), 2);
+  var latitude = pow(((deviceLatitudeDegree - destinationLatitudeDegree).abs() * 111.3194 + (deviceLatitudeMinute - destinationLatitudeMinute).abs() * 1.8553 + (deviceLatitudeSecond - destinationLatitudeSecond).abs() * 0.0309), 2);
+  var distance = sqrt(longitude + latitude);
+
+  return distance;
 }
